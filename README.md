@@ -1,5 +1,5 @@
 # Comparizy
-# Instalar las siguientes dependencias:
+### Instalar las siguientes dependencias:
 ```
   pip install requests
   pip install python-firebase
