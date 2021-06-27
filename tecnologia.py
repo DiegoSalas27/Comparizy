@@ -45,9 +45,9 @@ def find_products_tecnologia_computadoras():
                 'product_price': product_price,
                 'product_description': product_description,
                 'store': 'SF',
-                'category': 'Tecnología',
-                'sub_category': 'Computadoras',
-                'sub_sub_category': 'Laptops',
+                'category_group': 'Tecnología',
+                'category': 'Computadoras',
+                'sub_category': 'Laptops',
                 'brand': product_brand
             }
 
@@ -90,9 +90,9 @@ def find_products_tecnologia_computadoras():
                 'product_price': product_price,
                 'product_description': product_description,
                 'store': 'SF',
-                'category': 'Tecnología',
-                'sub_category': 'Computadoras',
-                'sub_sub_category': 'Tablets',
+                'category_group': 'Tecnología',
+                'category': 'Computadoras',
+                'sub_category': 'Tablets',
                 'brand': product_brand
             }
 
@@ -137,9 +137,9 @@ def find_products_tecnologia_computadoras():
                 'product_price': product_price,
                 'product_description': product_description,
                 'store': 'RI',
-                'category': 'Tecnología',
-                'sub_category': 'Computadoras',
-                'sub_sub_category': 'Laptops',
+                'category_group': 'Tecnología',
+                'category': 'Computadoras',
+                'sub_category': 'Laptops',
                 'brand': product_brand
             }
 
@@ -184,9 +184,9 @@ def find_products_tecnologia_computadoras():
                 'product_price': product_price,
                 'product_description': product_description,
                 'store': 'OE',
-                'category': 'Tecnología',
-                'sub_category': 'Computadoras',
-                'sub_sub_category': 'Laptops',
+                'category_group': 'Tecnología',
+                'category': 'Computadoras',
+                'sub_category': 'Laptops',
                 'brand': product_brand
             }
 
