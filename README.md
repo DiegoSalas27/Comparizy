@@ -6,4 +6,5 @@
   pip install git+https://github.com/ozgur/python-firebase
   pip install beautifulsoup4
   pip install lxml
+  pip install selenium
 ```
