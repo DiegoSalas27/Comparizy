@@ -7,13 +7,18 @@ import re
 import requests
 from selenium import webdriver
 import time
+import re
+from datetime import date
 
 firebase = firebase.FirebaseApplication("https://comparizy-c73ab-default-rtdb.firebaseio.com/", None)
 
 def find_products_tecnologia_computadoras():
-   #Clean database
-   #eg: products/categoria-padre/categoria/
-   firebase.delete("/comparizy-c73ab-default-rtdb/products/%s/%s/"%(TECNOLOGIA_GROUP_CATEGORY, COMPUTADORAS_CATEGORY), None)
+   #eg: products/grupo-categoria/categoria/
+   #Trabajamos con constantes (MAYUSCULAS) para evitar problemas de tipado
+    
+   #Analizar el siguiente detalle de producto como referencia 
+   #https://www.falabella.com.pe/falabella-pe/product/882222620/Laptop-Lenovo-81WD00U9US-14-FHD-Core-i5-1035G1,8GB,512GB-SSD,-Platinium-Grey,-Teclado-en-ingles/882222620
+   #Se recomienda probar linea por linea haciendo print de cada variable si se necesita comprender el código
 
    #Find saga's products
    #Laptops
@@ -21,45 +26,70 @@ def find_products_tecnologia_computadoras():
    print()
    html_text = requests.get('https://www.falabella.com.pe/falabella-pe/category/cat40712/Laptops',timeout=(3.05, 27)).text
    soup = BeautifulSoup(html_text, 'lxml')
-   product_cards = soup.find_all('div', class_='jsx-1172968660 pod')
-   for product_card in product_cards:
+   product_cards = soup.find_all('div', class_='jsx-1172968660 pod') #Obtener todas las filas de productos
+   count = 0
+   for product_card in product_cards: #Iterar todas las filas de productos
        try:
-           product_detail_link = product_card.find('a', class_='jsx-3128226947')['href']
-           product_image = product_card.find('a', class_='jsx-3128226947').img['src']
-           product_discount = re.findall(r'\d+', product_card.find('div', class_='pod-badges-LIST').span.text)[0]
-           product_detail_grid = product_card.find('a', class_='section-body')
-           product_brand = product_detail_grid.find('div', class_='jsx-1172968660').b.text
-           product_name = product_detail_grid.find('span').b.text
-           product_price = product_detail_grid.find('div', class_='section-body--right').text.split()[2]
-           product_description = product_card.find('ul', class_='section__pod-bottom-description').text
+            count += 1
+            product_detail_link = product_card.find('a', class_='jsx-3128226947')['href'] #Obtener link detalle
+            html_text_desc = requests.get(product_detail_link).text #Obtenemos HTML de pagina detalle
+            detail_link = BeautifulSoup(html_text_desc, 'lxml')
 
-           print('product_detail', product_detail_link)
-           print('product_image', product_image)
-           print('product_discount', product_discount)
-           print('product_brand', product_brand)
-           print('product_name', product_name)
-           print('product_price', product_price)
-           print('product_description', product_description)
+            #Extraccion de datos
 
-           data = {
-               'product_detail': product_detail_link,
-               'product_image': product_image,
-               'product_discount': product_discount,
-               'product_name': product_name,
-               'product_price': product_price,
-               'product_description': product_description,
-               'store': SAGA_STORE,
-               'category': TECNOLOGIA_GROUP_CATEGORY,
-               'sub_category': COMPUTADORAS_CATEGORY,
-               'sub_sub_category': LAPTOPS_SUBCATEGORY,
-               'brand': product_brand
-           }
+            product_image = detail_link.find('img', class_='jsx-2487856160')['src']
+            product_discount = detail_link.find_all('span', class_='jsx-51363394') #Hay dos elementos con clases iguales en este caso
 
-           #eg: products/categoria/subcateogria/sub-subcategoria
-           result = firebase.post("/comparizy-c73ab-default-rtdb/products/tecnologia/computadoras/laptops", data)
-           print(result)
+            #Obtenemos el que nos interesa del arreglo y extraemos solo los digitos
+            product_discount = re.findall(r'\d+', product_discount[len(product_discount) - 1].text)[0] 
+            product_brand = detail_link.find('a', class_='jsx-3572928369').text
+            product_name = detail_link.find('div', class_='jsx-3686231685').text
+            product_price = detail_link.find('li', class_='jsx-3342506598 price-0').div.span.text.split()[1] #Obtener solo los numeros no caracteres
+            product_description = detail_link.find('div', class_='jsx-3624412160 specifications-list').text #Podemos agregar clases separadas por un solo espacio para mayor especificidad y evitar conflictos con otros elementos
+            product_model = ''
+
+            #Esto puede seer muy parecido para todas la e-commerces
+            for row in detail_link.select('tbody tr'): #Obtenemos el tbody de donde sacamos todas especificaciones
+                row_text = [x.text for x in row.find_all('td')] #interamos cada especificacion
+                if row_text[0] == "Modelo": #Encontramos el modelo y los asignamos a product_model
+                    product_model = row_text[1]
+
+            saveModelConverted = product_model.replace("/", "A") #El backslash genera un anidamiento automatico en firebase (con esto se evita)
+
+            data = {
+                'product_detail': product_detail_link,
+                'product_image': product_image,
+                'product_discount': product_discount,
+                'product_name': product_name,
+                'product_price': product_price,
+                'product_description': product_description,
+                'store': SAGA_STORE,
+                'category_group': TECNOLOGIA_GROUP_CATEGORY,
+                'category': COMPUTADORAS_CATEGORY,
+                'sub_category': LAPTOPS_SUBCATEGORY,
+                'brand': product_brand,
+                'model': product_model, #Para poder hacer la comparación con el mismo producto en otras tiendas
+                'model_store_unique_identifier':  SAGA_STORE + '_' + saveModelConverted, #Para identificar el producto y actualizarlo (no eliminamos los productos, sino que actualizamos el registro y las variaciones de precios)
+            }
+
+            #%s se reemplaza por el valor de cada constante en el orden en que aparecen: tecnologia/computadoras/laptops/model_store_unique_identifier
+            #eg: products/grupo-categoria/categoria/subcategoria
+            path = "/comparizy-c73ab-default-rtdb/products/%s/%s/%s/%s"%(TECNOLOGIA_GROUP_CATEGORY, COMPUTADORAS_CATEGORY, LAPTOPS_SUBCATEGORY, data['model_store_unique_identifier'])
+            result = firebase.patch(path, data) #creamos o actualizamos
+            today = date.today()
+            price_history = firebase.get(path+'/price_history', None) #verificamos si tienen historial de precios
+            if price_history:
+                price_history.append({'fecha': str(today), 'price': result['product_price']}) #si existe se concatena
+                result['price_history'] = price_history
+            else:
+                result['price_history'] = [{'fecha': str(today), 'price': result['product_price']}] #si no existe se crea
+            result = firebase.patch(path, result) #se vuelve a guardar con esta ultma adicion
+
        except:
            continue
+
+# Realizar la misma tarea con las demas subcategorias de la categoría computadora 
+# Realizar el mismo procedimiento (el html puede variar entre e-commerce pero el código no debe ser muy distinto)
 
 #    #Tablets (Doesn't work yet check html)
 #    print('Saga products!!!')
@@ -214,7 +244,7 @@ def find_products_tecnologia_televisores():
     driver.maximize_window()
     try:
         driver.get('https://www.falabella.com.pe/falabella-pe/category/cat6370551/Televisores-LED')
-        scrolldown("0",driver)
+        scrolldownDepreceted("0",driver)
         html = driver.execute_script("return document.body.innerHTML;")
         print("Pagina mostrada")
     except Exception as e:
