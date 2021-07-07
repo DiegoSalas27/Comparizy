@@ -13,23 +13,37 @@ from datetime import date
 firebase = firebase.FirebaseApplication("https://comparizy-c73ab-default-rtdb.firebaseio.com/", None)
 
 def find_products_tecnologia_computadoras():
-   #eg: products/grupo-categoria/categoria/
-   #Trabajamos con constantes (MAYUSCULAS) para evitar problemas de tipado
-    
-   #Analizar el siguiente detalle de producto como referencia 
-   #https://www.falabella.com.pe/falabella-pe/product/882222620/Laptop-Lenovo-81WD00U9US-14-FHD-Core-i5-1035G1,8GB,512GB-SSD,-Platinium-Grey,-Teclado-en-ingles/882222620
-   #Se recomienda probar linea por linea haciendo print de cada variable si se necesita comprender el código
+    #eg: products/grupo-categoria/categoria/subcategoria
+    #Trabajamos con constantes (MAYUSCULAS) para evitar problemas de tipado
+        
+    #Analizar el siguiente detalle de producto como referencia 
+    #https://www.falabella.com.pe/falabella-pe/product/882222620/Laptop-Lenovo-81WD00U9US-14-FHD-Core-i5-1035G1,8GB,512GB-SSD,-Platinium-Grey,-Teclado-en-ingles/882222620
+    #Se recomienda probar linea por linea haciendo print de cada variable si se necesita comprender el código
 
-   #Find saga's products
-   #Laptops
-   print('Saga products!!!')
-   print()
-   html_text = requests.get('https://www.falabella.com.pe/falabella-pe/category/cat40712/Laptops',timeout=(3.05, 27)).text
-   soup = BeautifulSoup(html_text, 'lxml')
-   product_cards = soup.find_all('div', class_='jsx-1172968660 pod') #Obtener todas las filas de productos
-   count = 0
-   for product_card in product_cards: #Iterar todas las filas de productos
-       try:
+    #Find saga's products
+    #Laptops
+    print('Saga products!!!')
+    print()
+    
+    driver = webdriver.Chrome()
+    driver.get("about:blank")
+    driver.maximize_window()
+    try:
+        driver.get('https://www.falabella.com.pe/falabella-pe/category/cat40712/Laptops')
+        scrolldown("0",driver)
+        html = driver.execute_script("return document.body.innerHTML;")
+        print("Pagina mostrada")
+    except Exception as e:
+        print(e)
+    finally:
+        driver.quit()   
+    soup = BeautifulSoup(html,'lxml')
+    # html_text = requests.get('https://www.falabella.com.pe/falabella-pe/category/cat40712/Laptops',timeout=(3.05, 27)).text
+    # soup = BeautifulSoup(html_text, 'lxml')
+    product_cards = soup.find_all('div', class_='jsx-1172968660 pod') #Obtener todas las filas de productos
+    count = 0
+    for product_card in product_cards: #Iterar todas las filas de productos
+        try:
             count += 1
             product_detail_link = product_card.find('a', class_='jsx-3128226947')['href'] #Obtener link detalle
             html_text_desc = requests.get(product_detail_link).text #Obtenemos HTML de pagina detalle
@@ -44,7 +58,12 @@ def find_products_tecnologia_computadoras():
             product_discount = re.findall(r'\d+', product_discount[len(product_discount) - 1].text)[0] 
             product_brand = detail_link.find('a', class_='jsx-3572928369').text
             product_name = detail_link.find('div', class_='jsx-3686231685').text
-            product_price = detail_link.find('li', class_='jsx-3342506598 price-0').div.span.text.split()[1] #Obtener solo los numeros no caracteres
+            has_icon = detail_link.find('li', class_='jsx-3342506598 price-0').div.i
+            if has_icon:
+                product_price = detail_link.find('li', class_='jsx-3342506598 price-1').div.span.text.split()[1] #Obtener solo los numeros no caracteres
+            else:
+                product_price = detail_link.find('li', class_='jsx-3342506598 price-0').div.span.text.split()[1] #Obtener solo los numeros no caracteres
+            
             product_description = detail_link.find('div', class_='jsx-3624412160 specifications-list').text #Podemos agregar clases separadas por un solo espacio para mayor especificidad y evitar conflictos con otros elementos
             product_model = ''
 
@@ -85,8 +104,9 @@ def find_products_tecnologia_computadoras():
                 result['price_history'] = [{'fecha': str(today), 'price': result['product_price']}] #si no existe se crea
             result = firebase.patch(path, result) #se vuelve a guardar con esta ultma adicion
 
-       except:
-           continue
+        except:
+            print("Producto no creado, error en el web scraping")
+            continue
 
 # Realizar la misma tarea con las demas subcategorias de la categoría computadora 
 # Realizar el mismo procedimiento (el html puede variar entre e-commerce pero el código no debe ser muy distinto)
@@ -295,4 +315,5 @@ def find_products_tecnologia_televisores():
             result = firebase.post("/comparizy-c73ab-default-rtdb/products/tecnologia/televisores/LED", data)
             print(result)
         except:
+            print("Producto no creado, error en el web scraping")
             continue
