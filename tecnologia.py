@@ -10,8 +10,7 @@ import time
 import re
 from datetime import date
 
-
-firebase = firebase.FirebaseApplication("https://comparizy-c73ab-default-rtdb.firebaseio.com/", None)
+firebase = firebase.FirebaseApplication("https://comparizy-test-default-rtdb.firebaseio.com/", None) #test
 
 def find_products_tecnologia_computadoras():
     #eg: products/grupo-categoria/categoria/subcategoria
