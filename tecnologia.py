@@ -7,12 +7,13 @@ import re
 import requests
 from selenium import webdriver
 import time
-import re
 from datetime import date
 
 firebase = firebase.FirebaseApplication("https://comparizy-test-default-rtdb.firebaseio.com/", None) #test
 
-def find_products_tecnologia_computadoras():
+def find_products_tecnologia_computadoras_saga():
+    #procesador, disco duro, memoria y marca. (en vez del modelo)
+
     #eg: products/grupo-categoria/categoria/subcategoria
     #Trabajamos con constantes (MAYUSCULAS) para evitar problemas de tipado
         
@@ -25,12 +26,13 @@ def find_products_tecnologia_computadoras():
     print('Saga products!!!')
     print()
     
+    
     driver = webdriver.Chrome()
     driver.get("about:blank")
     driver.maximize_window()
     try:
         driver.get('https://www.falabella.com.pe/falabella-pe/category/cat40712/Laptops')
-        scrolldown("0",driver)
+        scrolldownSaga("0",driver)
         html = driver.execute_script("return document.body.innerHTML;")
         print("Pagina mostrada")
     except Exception as e:
@@ -42,11 +44,12 @@ def find_products_tecnologia_computadoras():
     # soup = BeautifulSoup(html_text, 'lxml')
     product_cards = soup.find_all('div', class_='jsx-1172968660 pod') #Obtener todas las filas de productos
     count = 0
+    product_name = ''
     for product_card in product_cards: #Iterar todas las filas de productos
         try:
             count += 1
             product_detail_link = product_card.find('a', class_='jsx-3128226947')['href'] #Obtener link detalle
-            html_text_desc = requests.get(product_detail_link).text #Obtenemos HTML de pagina detalle
+            html_text_desc = requests.get(product_detail_link).text #Obtenemos HTML de pagina detalle 
             detail_link = BeautifulSoup(html_text_desc, 'lxml')
 
             #Extraccion de datos
@@ -89,6 +92,7 @@ def find_products_tecnologia_computadoras():
                 'brand': product_brand,
                 'model': product_model, #Para poder hacer la comparación con el mismo producto en otras tiendas
                 'model_store_unique_identifier':  SAGA_STORE + '_' + saveModelConverted, #Para identificar el producto y actualizarlo (no eliminamos los productos, sino que actualizamos el registro y las variaciones de precios)
+                'pricekey': product_price + '_' +  SAGA_STORE + '_' + saveModelConverted #Para poder hacer paginación ordenada por precio en el app
             }
 
             #%s se reemplaza por el valor de cada constante en el orden en que aparecen: tecnologia/computadoras/laptops/model_store_unique_identifier
@@ -106,7 +110,240 @@ def find_products_tecnologia_computadoras():
 
         except:
             print("Producto no creado, error en el web scraping")
-            continue
+            print(product_name)
+            traceback.print_exc() #podemos ver en donde estuvo el error
+            continue #poner break en vez de continue para debuggear
+
+def find_products_tecnologia_computadoras_ripley():
+
+    #Find replay's products
+    print('Ripley products!!!')
+    print()
+
+    option = webdriver.ChromeOptions() #ver https://www.programmersought.com/article/30255594749/
+    option.add_argument('disable-infobars')
+
+    driver = webdriver.Chrome(chrome_options=option)
+    driver.get("about:blank")
+    driver.maximize_window()
+    try:
+        driver.get('https://simple.ripley.com.pe/tecnologia/computacion/laptops?source=menu')
+        scrolldownRipley("0",driver, 4623)
+        html = driver.execute_script("return document.body.innerHTML;")
+        print("Pagina mostrada")
+    except Exception as e:
+        print(e)
+    finally:
+        driver.quit()   
+    soup = BeautifulSoup(html,'lxml')
+
+    product_cards = soup.find_all('div', class_='catalog-product-item')
+    count = 0
+    product_name = ''
+    for product_card in product_cards:
+        try:
+                # count += 1
+            # if count == 3:
+                product_detail_link = product_card.find('a', class_='catalog-product-item')['href'] #Obtener link detalle
+                driver = driver = webdriver.Chrome(chrome_options=option) #debemos de crear un nuevo driver y scrollear la pagina dado que es la
+                driver.get("about:blank") #unica forma de obtener todo el html completo (comprobado)
+                driver.maximize_window()
+                try:
+                    driver.get('https://simple.ripley.com.pe' + product_detail_link)
+                    scrolldownRipley("0",driver, 3298, 0.01) #obtener el tamaño de la pagina de detalle (document.body.scrollHeight)
+                    html = driver.execute_script("return document.body.innerHTML;")
+                    print("Pagina mostrada")
+                except Exception as e:
+                    print(e)
+                finally:
+                    driver.quit()   
+
+                detail_link = BeautifulSoup(html, 'lxml')
+
+                #guarda en text files el html y analiza donde esta el texto que buscas (el archivo de texto no debe existir para crearlo) 
+                with open('file4.txt', 'w') as file: 
+                    file.write(detail_link.prettify())  #analiza el html de la web y coteja con lo que tengas
+
+                print('PASO LA LECTURA!!! ... obteniendo datos!')
+                #Extraccion de datos
+                product_image = detail_link.find('ul', class_='product-image-previews').li.img['data-src'][2:] # quitale las 2 rayitas de adelante del string
+                product_name = detail_link.find('section', class_='product-header visible-xs').h1.text
+                product_discount = detail_link.find('span', class_='discount-percentage')
+                if product_discount:
+                    product_discount = detail_link.find('span', class_='discount-percentage').text[1:-1] #solo quiero el numerotext.
+                else:
+                    product_discount = 0
+                 
+                product_price = detail_link.find('div', class_='product-price-container product-internet-price-not-best')
+                if product_price:
+                    product_price = detail_link.find('div', class_='product-price-container product-internet-price-not-best').dt.text.split()[1]
+                else:
+                     product_price = detail_link.find('div', class_='product-price-container product-internet-price').dt.text.split()[1]
+                 
+                product_description = detail_link.find('h2', class_='product-short-description').text
+                
+                #obtenemos referencia a la tabla de especificaciones
+                tableReference = detail_link.find('table', class_='table table-striped')
+                product_brand = ''
+                product_model = ''
+
+                #Esto puede seer muy parecido para todas la e-commerces
+                for row in tableReference.select('tbody tr'): #Obtenemos el tbody de donde sacamos todas especificaciones
+                    row_text = [x.text for x in row.find_all('td')] #interamos cada especificacion
+                    if row_text[0] == "Marca": #Encontramos la marca, modelo
+                        product_brand = row_text[1]
+                    if row_text[0] == "Modelo": 
+                        product_model = row_text[1]
+                
+                saveModelConverted = product_model.replace("/", "A") #El backslash genera un anidamiento automatico en firebase (con esto se evita)
+                #.strip() remueve los espacios en blanco al inicio y al final de un string
+                
+                data = {
+                    'product_detail': 'https://simple.ripley.com.pe' + product_detail_link,
+                    'product_image': product_image,
+                    'product_discount': product_discount,
+                    'product_name': product_name,
+                    'product_price': product_price,
+                    'product_description': product_description,
+                    'store': RIPLEY_STORE,
+                    'category_group': TECNOLOGIA_GROUP_CATEGORY,
+                    'category': COMPUTADORAS_CATEGORY,
+                    'sub_category': LAPTOPS_SUBCATEGORY,
+                    'brand': product_brand,
+                    'model': product_model.strip(), #Para poder hacer la comparación con el mismo producto en otras tiendas
+                    'model_store_unique_identifier':  RIPLEY_STORE + '_' + saveModelConverted.strip(), #Para identificar el producto y actualizarlo (no eliminamos los productos, sino que actualizamos el registro y las variaciones de precios)
+                    'pricekey': product_price + '_' +  RIPLEY_STORE + '_' + saveModelConverted .strip()#Para poder hacer paginación ordenada por precio en el app
+                }
+
+                #%s se reemplaza por el valor de cada constante en el orden en que aparecen: tecnologia/computadoras/laptops/model_store_unique_identifier
+                #eg: products/grupo-categoria/categoria/subcategoria
+                path = "/comparizy-c73ab-default-rtdb/products/%s/%s/%s/%s"%(TECNOLOGIA_GROUP_CATEGORY, COMPUTADORAS_CATEGORY, LAPTOPS_SUBCATEGORY, data['model_store_unique_identifier'])
+                result = firebase.patch(path, data) #creamos o actualizamos
+                today = date.today()
+                price_history = firebase.get(path+'/price_history', None) #verificamos si tienen historial de precios
+                if price_history:
+                    price_history.append({'fecha': str(today), 'price': result['product_price']}) #si existe se concatena
+                    result['price_history'] = price_history
+                else:
+                    result['price_history'] = [{'fecha': str(today), 'price': result['product_price']}] #si no existe se crea
+                result = firebase.patch(path, result) #se vuelve a guardar con esta ultma adicion
+                print('TODO CORRECTO!!!')
+        except Exception:
+            print("Producto no creado, error en el web scraping")
+            print(product_name)
+            traceback.print_exc() #podemos ver en donde estuvo el error
+            continue #poner break en vez de continue para debuggear
+
+def find_products_tecnologia_computadoras_oeschle():
+
+    #Find oeschle's products
+    print('Oeschle products!!!')
+    print()
+
+    option = webdriver.ChromeOptions() #ver https://www.programmersought.com/article/30255594749/
+    option.add_argument('disable-infobars')
+
+    driver = webdriver.Chrome(chrome_options=option)
+    driver.get("about:blank")
+    driver.maximize_window()
+    try:
+        driver.get('https://www.oechsle.pe/tecnologia/computo/laptops/')
+        scrolldownRipley("0",driver, 4142) #(document.body.scrollHeight)
+        html = driver.execute_script("return document.body.innerHTML;")
+        print("Pagina mostrada")
+    except Exception as e:
+        print(e)
+    finally:
+        driver.quit()   
+    soup = BeautifulSoup(html,'lxml')
+    product_cards = soup.find_all('li', class_='tecnologia-|-oechsle')
+    count = 0
+    product_name = ''
+    for product_card in product_cards:
+        try:
+            # count += 1
+            # if count == 1:
+            product_detail_link = product_card.find('a', class_='prod-image')['href'] #Obtener link detalle
+            driver = driver = webdriver.Chrome(chrome_options=option) #debemos de crear un nuevo driver y scrollear la pagina dado que es la
+            driver.get("about:blank") #unica forma de obtener todo el html completo (comprobado)
+            driver.maximize_window()
+            try:
+                driver.get(product_detail_link)
+                scrolldownRipley("0",driver, 5774, 0.001) #obtener el tamaño de la pagina de detalle (document.body.scrollHeight)
+                html = driver.execute_script("return document.body.innerHTML;")
+                print("Pagina mostrada")
+            except Exception as e:
+                print(e)
+            finally:
+                driver.quit()   
+            detail_link = BeautifulSoup(html, 'lxml')
+
+            #guarda en text files el html y analiza donde esta el texto que buscas (el archivo de texto no debe existir para crearlo) 
+            with open('file5.txt', 'w') as file: 
+                file.write(detail_link.prettify())  #analiza el html de la web y coteja con lo que tengas
+
+            #En Oeschle algunos productos no tienen modelo
+            product_model = detail_link.find('td', class_='value-field Modelo')
+            print("Tiene Modelo?", product_model)
+            #si no tiene modelo se pasa por alto el resto del codigo para evitar inconsistencias
+
+            if product_model is not None:
+                print('PASO LA LECTURA!!! ... obteniendo datos!')
+                #Extraccion de datos
+                product_model = detail_link.find('td', class_='value-field Modelo').text 
+                product_image = detail_link.find('img', class_='sku-rich-image-main')['src']
+                product_name = detail_link.find('div', class_='productName').text
+                product_discount = detail_link.find('span', class_='flag-of ml-10')
+                if product_discount:
+                    product_discount = detail_link.find('span', class_='flag-of ml-10').text[1:-1] #solo quiero el numero
+                else:
+                    product_discount = 0
+                    
+                product_price = detail_link.find_all('span', class_='text fz-17 text-brown fw-bold')
+                if product_price:
+                    product_price = detail_link.find_all('span', class_='text fz-17 text-brown fw-bold')[len(product_price) - 1].text.split()[1]
+
+                product_description = detail_link.find('div', class_='text fz-15 lh-14 text-gray-light p-15').text
+                product_brand = detail_link.find('div', class_='brandName').a.text
+                
+                saveModelConverted = product_model.replace("/", "A") #El backslash genera un anidamiento automatico en firebase (con esto se evita)
+                #.strip() remueve los espacios en blanco al inicio y al final de un string
+                
+                data = {
+                    'product_detail': 'https://simple.ripley.com.pe' + product_detail_link,
+                    'product_image': product_image,
+                    'product_discount': product_discount,
+                    'product_name': product_name,
+                    'product_price': product_price,
+                    'product_description': product_description,
+                    'store': OESCHLE_STORE,
+                    'category_group': TECNOLOGIA_GROUP_CATEGORY,
+                    'category': COMPUTADORAS_CATEGORY,
+                    'sub_category': LAPTOPS_SUBCATEGORY,
+                    'brand': product_brand,
+                    'model': product_model.strip(), #Para poder hacer la comparación con el mismo producto en otras tiendas
+                    'model_store_unique_identifier':  OESCHLE_STORE + '_' + saveModelConverted.strip(), #Para identificar el producto y actualizarlo (no eliminamos los productos, sino que actualizamos el registro y las variaciones de precios)
+                    'pricekey': product_price + '_' +  OESCHLE_STORE + '_' + saveModelConverted .strip()#Para poder hacer paginación ordenada por precio en el app
+                }
+
+                #%s se reemplaza por el valor de cada constante en el orden en que aparecen: tecnologia/computadoras/laptops/model_store_unique_identifier
+                #eg: products/grupo-categoria/categoria/subcategoria
+                path = "/comparizy-c73ab-default-rtdb/products/%s/%s/%s/%s"%(TECNOLOGIA_GROUP_CATEGORY, COMPUTADORAS_CATEGORY, LAPTOPS_SUBCATEGORY, data['model_store_unique_identifier'])
+                result = firebase.patch(path, data) #creamos o actualizamos
+                today = date.today()
+                price_history = firebase.get(path+'/price_history', None) #verificamos si tienen historial de precios
+                if price_history:
+                    price_history.append({'fecha': str(today), 'price': result['product_price']}) #si existe se concatena
+                    result['price_history'] = price_history
+                else:
+                    result['price_history'] = [{'fecha': str(today), 'price': result['product_price']}] #si no existe se crea
+                result = firebase.patch(path, result) #se vuelve a guardar con esta ultma adicion
+                print('TODO CORRECTO!!!')
+        except Exception:
+            print("Producto no creado, error en el web scraping")
+            print(product_name)
+            traceback.print_exc() #podemos ver en donde estuvo el error
+            continue #poner break en vez de continue para debuggear
 
 # Realizar la misma tarea con las demas subcategorias de la categoría computadora 
 # Realizar el mismo procedimiento (el html puede variar entre e-commerce pero el código no debe ser muy distinto)
